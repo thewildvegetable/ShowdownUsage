@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<title>Showdown Usage Stats</title>
+    <link href="https://fonts.googleapis.com/css?family=Oswald" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Nunito" rel="stylesheet">
+	<style>
+		*{
+			font-family: "Nunito",verdana,sans-serif;
+		}
+        body{
+            background-color: rgb(220, 220, 220);
+        }
+        #formatForm{
+            text-align: center;
+        }
+        #formatForm p{
+            font-size: 30px;
+        }
+        #formatForm input{
+            margin-left: 3px;
+            margin-right: 6px;
+        }
+        .grid{
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .pokeDisplay{
+            flex: 1;
+            text-align: center;
+        }
+        #moveList{
+            display: none;
+            position: fixed;
+            font-family: "Oswald",verdana,sans-serif;
+            z-index: 1; 
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(220, 220, 220, 1);
+        }
+        #learnSet{
+            text-align: center;
+        }
+        #quit {
+            color: rgb(0,0,0);
+            background-color: rgb(255, 255, 255);
+            position: absolute;
+            top: 0px;
+            right: 5%;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        #quit:hover,
+        #quit:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .ability{
+            border: 1px solid black;
+        }
+        .move{
+            border-top: 1px solid black;
+        }
+        .details{
+            -webkit-animation: fadein 2s;
+            background-color: rgb(190, 190, 190);
+            border: 0.1px solid black;
+        }
+        .spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid rgb(0,0,0);
+            border-radius: 50%;
+            width: 10px;
+            height: 10px;
+            left: 30%;
+            animation: spin 1s linear infinite;
+            float: left;
+        }
+
+        @keyframes spin {
+            from {
+                transform:rotate(0deg);
+            }
+            to {
+                transform:rotate(360deg);
+            }
+        }
+        
+        @-webkit-keyframes fadein {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        
+	</style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+	<script>
+        "use strict";
+	(function(){
+        //jquery ready function (similar to window.onload)
+        $(document).ready(function() {
+            document.querySelector("#quit").onclick = function(e){
+                document.querySelector("#learnSet").innerHTML = "";
+                document.querySelector("#moveList").style.display = "none";
+            }
+          //have jquery listen for the pokemonDataForm's submit event
+          $("#formatForm").submit(function(e){
+            //clear the result div
+            document.querySelector("#result").innerHTML = "";
+            
+            //let the user know we are searching
+            var div = document.createElement("div");
+            div.classList.add("spinner");
+            var p = document.createElement("p");
+            p.textContent = "Searching for Usage Stats now";
+            document.querySelector("#result").appendChild(div);
+            document.querySelector("#result").appendChild(p);
+              
+            //grab the form's action attribute so we know where to submit to
+            var action = $("#formatForm").attr("action");
+
+            //grab the generation number and the format name and encode them to be valid for queryParameters
+            var generation = encodeURIComponent($("#generation").val());
+            var format = encodeURIComponent($("#formatName").val());
+
+            //create the query string to send to the server
+            var data = "generation=" + generation + "&format=" + format;
+              
+            //if online then search
+            if (navigator.onLine){
+                //using jquery's ajax function
+                $.ajax({
+                  //don't cache the results. Otherwise jquery won't submit again.
+                  //It will think this is the same request and not run it a second time.
+                  cache: false,
+                  //set our type to "get' so the server receives a GET request. We
+                  //want to get data from an API, not upload data to the server.
+                  type: "get",
+                  //set the url to our form's action url
+                  url: action,
+                  //set data to the query string we built
+                  data: data,
+                  //assume a JSON response from the server, so jquery knows how
+                  //to parse the response.
+                  dataType: "json",
+                  //on success from server
+                  //Gets result as the server response
+                  //status as the status code from the server
+                  //and xhr as the xhr object it created behind the scenes
+                  success: function (result, status, xhr) {
+                      //clear the result div
+                      document.querySelector("#result").innerHTML = "";
+
+                      //loop through the array, make a paragraph tag for the name and a paragraph tag for the image (img src=https://www.serebii.net/sunmoon/pokemon/json.national_id.png)
+                      var section = document.createElement("section");
+                      section.classList.add("grid");
+                      for(var i = 0; i < result.length; i++){
+                          var div = document.createElement("div");
+                          div.classList.add("pokeDisplay");
+                          //add an onclick event to search for a pokemon's movelist
+                          div.addEventListener("click", function(e){
+                              //get the pokemon's name
+                              if(e.target.nodeName === "P"){
+                                  var name = e.target.textContent;
+                              }
+                              else if(e.target.nodeName === "IMG"){
+                                  var alt = e.target.alt;
+                                  var name = alt.split("Image of ")[1];
+                              }
+                              
+                              //if a name is gotten and online, display the movelist
+                              if (name && navigator.onLine){
+                                  placeMoveList(name);
+                              }
+                          });
+
+                          //pull out the name and store it in a p tag
+                          var p1 = document.createElement("p");
+                          p1.textContent = result[i].names.en;
+                          div.appendChild(p1);
+
+                          //get the image of the pokemon and store it in an img tag in a p tag
+                          var p2 = document.createElement("p");
+                          var img = document.createElement("img");
+                          //handle numbers iwth less than 3 digits
+                          if (result[i].national_id < 10){
+                              img.src = "https://www.serebii.net/sunmoon/pokemon/00" + result[i].national_id + ".png";
+                          }
+                          else if (result[i].national_id < 100){
+                              img.src = "https://www.serebii.net/sunmoon/pokemon/0" + result[i].national_id + ".png";
+                          }
+                          else{
+                              img.src = "https://www.serebii.net/sunmoon/pokemon/" + result[i].national_id + ".png";
+                          }
+                          img.alt = "Image of " + result[i].names.en;
+                          p2.appendChild(img);
+                          div.appendChild(p2);
+
+                          //place it all into section
+                          section.appendChild(div);
+                      }
+                      //place the data into the result div
+                      $("#result").append(section);
+                  },
+                  //on error from server
+                  //Gets error as the server response
+                  //status as the status code from the server
+                  //and xhr as the xhr object it created behind the scenes
+                  error: function (error, status, xhr) {
+                    //clear the result div
+                    document.querySelector("#result").innerHTML = "";
+                    console.dir(error);
+                    //add the error message to the screen for us to see.
+                    $("#result").text(error.responseText);
+                  }
+                });
+            }
+            else{
+                //add an error message that the user is offline
+                $("#result").text("Can't connect");
+            }
+
+            //NEED TO CANCEL THE BROWSER'S DEFAULT FORM ACTION
+            //e.preventDefault will stop it from doing the request
+            e.preventDefault();
+            //return false will stop it from trying to change page
+            //to the action URL.
+            return false;
+          });
+        });
+        
+        //get a pokemon's movelist and abilities. Display it in a modal window
+        function placeMoveList(name){
+            var action = "/pokemon"
+            var data = "name=" + name;
+            //using jquery's ajax function
+            $.ajax({
+              //don't cache the results. Otherwise jquery won't submit again.
+              //It will think this is the same request and not run it a second time.
+              cache: false,
+              //set our type to "get' so the server receives a GET request. We
+              //want to get data from an API, not upload data to the server.
+              type: "get",
+              //set the url to our form's action url
+              url: action,
+              //set data to the query string we built
+              data: data,
+              //assume a JSON response from the server, so jquery knows how
+              //to parse the response.
+              dataType: "json",
+              //on success from server
+              //Gets result as the server response
+              //status as the status code from the server
+              //and xhr as the xhr object it created behind the scenes
+              success: function (result, status, xhr) {
+                  //get the moveList and ability arrays
+                  var moveList = result.learnset;
+                  var ability = result.abilities;
+                  
+                  //make the section this will go in and it's headers
+                  var section = document.createElement("section");
+                  var h1 = document.createElement("h1");
+                  var abilityH2 = document.createElement("h2");
+                  h1.textContent = result.names.en;
+                  abilityH2.textContent = "Abilities:";
+                  section.appendChild(h1);
+                  section.appendChild(abilityH2);
+                  
+                  //loop through the abilities and add them
+                  for (var i = 0; i < ability.length; i++){
+                      var div = document.createElement("div");
+                      div.classList.add("ability");
+                      
+                      //add an onclick event to get the ability's details
+                      div.addEventListener("click", function(e){
+                          //remove any previously placed details
+                          var prevDetails = document.getElementsByClassName("details");
+                          for(var i =0; i < prevDetails.length; i++){
+                              prevDetails[i].parentNode.removeChild(prevDetails[i]);
+                          }
+                          
+                          //add details of the ability if online
+                          if (e.target && navigator.onLine){    //added to ensure searching only happens when e.target isn't deleted
+                              displayAbility(e);
+                          }
+                      });
+                      
+                      //store the ability name in the div tag
+                      var p = document.createElement("p");
+                      p.textContent = ability[i].name;
+                      div.appendChild(p);
+                      section.appendChild(div);
+                  }
+                  
+                  //add the movelist header
+                  var moveH2 = document.createElement("h2");
+                  moveH2.textContent = "Moves:";
+                  section.appendChild(moveH2);
+                  
+                  //loop through the moves and add them
+                  for (var i = 0; i < moveList.length; i++){
+                      var div = document.createElement("div");
+                      div.classList.add("move");
+                      
+                      //add an onclick event to get the move's details
+                      div.addEventListener("click", function(e){
+                          //remove any previously placed details
+                          var prevDetails = document.getElementsByClassName("details");
+                          for(var i =0; i < prevDetails.length; i++){
+                              prevDetails[i].parentNode.removeChild(prevDetails[i]);
+                          }
+                          
+                          //add details for this move if online
+                          if (e.target && navigator.onLine){    //added to ensure searching only happens when e.target isn't deleted
+                              displayMove(e);
+                          }
+                      });
+                      
+                      //store the move name in the div tag
+                      var p = document.createElement("p");
+                      p.textContent = moveList[i].move;
+                      div.appendChild(p);
+                      section.appendChild(div);
+                  }
+                  
+                  //attach the section to the modal window
+                  document.getElementById("learnSet").innerHTML = "";
+                  document.getElementById("learnSet").appendChild(section);
+                  document.getElementById("moveList").style.display = "block";
+              },
+              //on error from server
+              //Gets error as the server response
+              //status as the status code from the server
+              //and xhr as the xhr object it created behind the scenes
+              error: function (error, status, xhr) {
+                  //display an error message
+                  $("#learnSet").text("Failed to get movelist");
+                  document.getElementById("moveList").style.display = "block";
+              }
+            });
+
+            //return false will stop it from trying to change page
+            //to the action URL.
+            return false;
+        }
+        
+        function displayAbility(e){
+            var action = "/ability"
+            var data = "abilityName=" + e.target.textContent;
+            //using jquery's ajax function
+            $.ajax({
+              //don't cache the results. Otherwise jquery won't submit again.
+              //It will think this is the same request and not run it a second time.
+              cache: false,
+              //set our type to "get' so the server receives a GET request. We
+              //want to get data from an API, not upload data to the server.
+              type: "get",
+              //set the url to our form's action url
+              url: action,
+              //set data to the query string we built
+              data: data,
+              //assume a JSON response from the server, so jquery knows how
+              //to parse the response.
+              dataType: "json",
+              //on success from server
+              //Gets result as the server response
+              //status as the status code from the server
+              //and xhr as the xhr object it created behind the scenes
+              success: function (result, status, xhr) {
+                  //done to avoid an error if null was returned
+                  if (result){
+                      //make a div to add to e.target
+                      var div = document.createElement("div");
+                      div.classList.add("details");
+
+                      //add the ability description
+                      var p1 = document.createElement("p");
+                      p1.textContent = result.descriptions.en;
+                      div.appendChild(p1);
+
+                      //place div onto the target
+                      e.target.appendChild(div);
+                  }
+              },
+              //on error from server
+              //Gets error as the server response
+              //status as the status code from the server
+              //and xhr as the xhr object it created behind the scenes
+              error: function (error, status, xhr) {
+                  //make a div to add to e.target
+                  var div = document.createElement("div");
+                  div.classList.add("details");
+                  
+                  //report the error
+                  var p1 = document.createElement("p");
+                  p1.textContent = "Failed to get details for this ability";
+                  div.appendChild(p1);
+                  
+                  //place div onto the target
+                  e.target.appendChild(div);
+              }
+            });
+
+            //return false will stop it from trying to change page
+            //to the action URL.
+            return false;
+        }
+        
+        function displayMove(e){
+            var action = "/move"
+            var data = "moveName=" + e.target.textContent;
+            //using jquery's ajax function
+            $.ajax({
+              //don't cache the results. Otherwise jquery won't submit again.
+              //It will think this is the same request and not run it a second time.
+              cache: false,
+              //set our type to "get' so the server receives a GET request. We
+              //want to get data from an API, not upload data to the server.
+              type: "get",
+              //set the url to our form's action url
+              url: action,
+              //set data to the query string we built
+              data: data,
+              //assume a JSON response from the server, so jquery knows how
+              //to parse the response.
+              dataType: "json",
+              //on success from server
+              //Gets result as the server response
+              //status as the status code from the server
+              //and xhr as the xhr object it created behind the scenes
+              success: function (result, status, xhr) {
+                  //done to ensure no error from result not existing
+                  if (result){
+                      //make a div to add to e.target
+                      var div = document.createElement("div");
+                      div.classList.add("details");
+
+                      //add the move type
+                      var p1 = document.createElement("p");
+                      p1.textContent = result.category + " move";
+                      div.appendChild(p1);
+                      //add the move attributes
+                      var p2 = document.createElement("p");
+                      p2.textContent = "PP: " + result.pp + " Power: " + result.power + " Accuracy: " + result.accuracy;
+                      div.appendChild(p2);
+                      //add the move description
+                      var p3 = document.createElement("p");
+                      p3.textContent = result.descriptions.en;
+                      div.appendChild(p3);
+
+                      //place div onto the target
+                      e.target.appendChild(div);
+                  }
+              },
+              //on error from server
+              //Gets error as the server response
+              //status as the status code from the server
+              //and xhr as the xhr object it created behind the scenes
+              error: function (error, status, xhr) {
+                  //make a div to add to e.target
+                  var div = document.createElement("div");
+                  div.classList.add("details");
+                  
+                  //report the error
+                  var p1 = document.createElement("p");
+                  p1.textContent = "Failed to get details for this move";
+                  div.appendChild(p1);
+                  
+                  //place div onto the target
+                  e.target.appendChild(div);
+              }
+            });
+
+            //return false will stop it from trying to change page
+            //to the action URL.
+            return false;
+        }
+    })()
+	</script>
+</head>
+<body>
+    <form id="formatForm" action="/format" method="get">
+        <p>Pokemon Showdown Usage Stats:</p>
+        <span class="searchType">Generation: </span><input id="generation" type="number" max="7" min="1" name="generation" placeholder="Enter a number" required>
+        <span class="searchType">Format: </span><input id="formatName" type="text" name="format" placeholder="Enter format name (Ex: OU, RU, vgc2017)" required>
+        <input type="submit" value="Fetch Data">
+    </form>
+	<div id='result'></div>
+    <div id="moveList"><button id="quit">Quit</button><div id="learnSet"></div></div>
+</body>
+</html>
